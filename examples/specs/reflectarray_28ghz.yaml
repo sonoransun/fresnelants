@@ -1,0 +1,9 @@
+kind: reflectarray
+focal_length: 0.20    # m, feed distance
+design_freq: 28.0e9
+nx: 32
+ny: 32
+cell_size: 0.0        # 0 → 0.5 λ
+beam_theta_deg: 0.0
+beam_phi_deg: 0.0
+feed_q: 6.0

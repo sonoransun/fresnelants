@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install --upgrade pip
+      - run: .venv/bin/pip install -e ".[dev,fast]"
+      - run: make lint
+      - name: ruff format --check
+        run: .venv/bin/ruff format --check .
+      - name: mypy (non-strict, advisory)
+        run: .venv/bin/mypy src || true
+      - run: make test
+
+  gallery:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install -e ".[dev]"
+      - run: make gallery
+      - name: Verify gallery is up to date
+        run: |
+          if ! git diff --exit-code docs/img/; then
+            echo "Gallery is out of sync — re-run docs/generate_figures.py and commit."
+            exit 1
+          fi
+
+  fullwave:
+    # Meep is conda-only; this job is informational and never blocks merging.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.12"
+          channels: conda-forge
+      - run: conda install -y -n base -c conda-forge pymeep
+      - run: pip install -e ".[dev,fullwave]"
+      - run: pytest -m fullwave

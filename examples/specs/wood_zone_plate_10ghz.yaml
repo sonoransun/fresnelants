@@ -1,0 +1,4 @@
+kind: wood
+focal_length: 1.0    # meters
+design_freq: 10.0e9  # Hz
+num_zones: 12

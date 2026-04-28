@@ -1,0 +1,189 @@
+# =============================================================================
+# Python bytecode & native
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# =============================================================================
+# Virtual environments
+# =============================================================================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# =============================================================================
+# Build / packaging
+# =============================================================================
+build/
+dist/
+wheels/
+share/python-wheels/
+*.egg
+*.egg-info/
+.eggs/
+MANIFEST
+.installed.cfg
+__pypackages__/          # PEP 582
+pip-log.txt
+pip-delete-this-directory.txt
+# Lockfiles are intentionally tracked — uv.lock, poetry.lock, requirements*.txt
+# stay in the repo so contributors get reproducible installs.
+
+# =============================================================================
+# Test / coverage
+# =============================================================================
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+.cache/
+.hypothesis/
+
+# =============================================================================
+# Type checkers
+# =============================================================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.pyright/
+
+# =============================================================================
+# Linters / formatters
+# =============================================================================
+.ruff_cache/
+.black_cache/
+
+# =============================================================================
+# Profiling / benchmarks
+# =============================================================================
+*.prof
+.benchmarks/
+
+# =============================================================================
+# Notebooks
+# =============================================================================
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# =============================================================================
+# Environment / secrets
+# =============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+.secrets/
+
+# =============================================================================
+# Logs
+# =============================================================================
+*.log
+logs/
+
+# =============================================================================
+# Docs build
+# =============================================================================
+site/
+
+# =============================================================================
+# IDE / editors
+# =============================================================================
+# JetBrains
+.idea/
+*.iml
+
+# Sublime
+*.sublime-project
+*.sublime-workspace
+
+# Spyder / PyDev / Rope
+.spyderproject
+.spyproject
+.ropeproject
+
+# Vim
+*.swp
+*.swo
+*.swn
+Session.vim
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# VS Code — selectively unignore project-shared config files.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+*.code-workspace
+
+# =============================================================================
+# OS
+# =============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.nfs*
+.fuse_hidden*
+.directory
+.Trash-*
+
+# =============================================================================
+# AI tooling
+# =============================================================================
+.claude/settings.local.json
+.cursor/
+.aider*
+.continue/
+.codeium*
+
+# =============================================================================
+# FresnelAnts ephemeral outputs
+# =============================================================================
+artifacts/
+docs/stl/
+docs/gerber/
+
+# Mesh and PCB outputs anywhere — these are big and regeneratable.
+*.stl
+*.step
+*.stp
+*.gbr
+*.drl
+
+# Reference assets committed to docs/img/ are kept (override the global bans).
+!docs/img/**/*.stl
+!docs/img/**/*.step
+!docs/img/**/*.stp
+!docs/img/**/*.gbr
+!docs/img/**/*.drl

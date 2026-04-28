@@ -1,0 +1,56 @@
+site_name: FresnelAnts
+site_description: Fresnel antenna design system — zone plates, reflectarrays, lenses
+repo_url: https://github.com/example/fresnelants
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: amber
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - search
+  - mermaid2
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Theory: theory.md
+  - Designs:
+      - Soret / Wood zone plate: designs/zone_plate.md
+      - Offset Fresnel: designs/offset.md
+      - Phase-correcting plate: designs/phase_correcting.md
+      - Reflectarray: designs/reflectarray.md
+      - Curvilinear / 3D: designs/curvilinear.md
+  - Solvers: solvers.md
+  - Manufacturing: manufacturing.md
+  - Extensions (v0.2):
+      - Composite multi-stage: extensions/composite.md
+      - Reconfigurable RIS: extensions/ris.md
+      - Metasurface cells: extensions/metasurface.md
+      - Conformal surfaces: extensions/conformal.md
+  - Extensions (v0.3):
+      - Time-modulated arrays: extensions/timemod.md
+      - Phase synthesis: extensions/synth.md
+      - Hardware in the loop: extensions/hardware.md

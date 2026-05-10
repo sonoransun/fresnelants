@@ -1,0 +1,6 @@
+kind: conical_fractal
+design_freq: 77.0e9
+half_angle_deg: 45.0
+height: 0.05
+stage: 2
+phase_reversal: true

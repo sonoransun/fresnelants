@@ -1,0 +1,6 @@
+kind: sierpinski_reflectarray
+focal_length: 0.20
+design_freq: 28.0e9
+nx: 27
+ny: 27
+fractal_stage: 2

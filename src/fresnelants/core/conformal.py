@@ -100,6 +100,46 @@ class ConformalAperture:
         Et = np.zeros(points.shape[0], dtype=np.complex128)
         return cls(points=points, normals=normals, areas=areas, Et=Et, freq=freq)
 
+    @classmethod
+    def from_cone(
+        cls,
+        half_angle: float,
+        height: float,
+        nu: int = 80,
+        nv: int = 60,
+        freq: float = 28e9,
+    ) -> ConformalAperture:
+        """Right-circular-cone mesh with apex at origin, opening toward +z.
+
+        Half-angle ``α`` is measured from the +z axis; base radius = ``h·tan α``;
+        slant length = ``h/cos α``. Outward normals tilt down-and-out:
+        ``n = (cos α · cos φ, cos α · sin φ, −sin α)``.
+
+        The mesh skips the degenerate apex point (z = 0); the innermost
+        annulus starts at z = h / nv.
+        """
+        if not 0.0 < half_angle < np.pi / 2:
+            raise ValueError("half_angle must be in (0, π/2).")
+        if height <= 0.0:
+            raise ValueError("height must be positive.")
+        z = np.linspace(height / nv, height, nv) if nv > 1 else np.array([height])
+        phi = np.linspace(0.0, 2.0 * np.pi, nu, endpoint=False)
+        Phi, Z = np.meshgrid(phi, z, indexing="xy")
+        rho = Z * np.tan(half_angle)
+        X = rho * np.cos(Phi)
+        Y = rho * np.sin(Phi)
+        points = np.stack([X.flatten(), Y.flatten(), Z.flatten()], axis=1)
+        nx = np.cos(half_angle) * np.cos(Phi)
+        ny = np.cos(half_angle) * np.sin(Phi)
+        nz = -np.sin(half_angle) * np.ones_like(Phi)
+        normals = np.stack([nx.flatten(), ny.flatten(), nz.flatten()], axis=1)
+        d_z = (z[1] - z[0]) if nv > 1 else height
+        d_phi = (phi[1] - phi[0]) if nu > 1 else 2.0 * np.pi
+        # dA = z · tan α · sec α · dφ · dz
+        areas = (Z * np.tan(half_angle) / np.cos(half_angle) * d_phi * d_z).flatten()
+        Et = np.zeros(points.shape[0], dtype=np.complex128)
+        return cls(points=points, normals=normals, areas=areas, Et=Et, freq=freq)
+
     def with_field(self, Et: NDArray[np.complex128]) -> ConformalAperture:
         return ConformalAperture(
             points=self.points,

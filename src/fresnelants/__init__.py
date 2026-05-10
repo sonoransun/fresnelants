@@ -18,6 +18,14 @@ from .designs.composite import (
 )
 from .designs.conformal import CylindricalFresnelLens, SphericalFresnelLens
 from .designs.curvilinear import CurvilinearFresnel
+from .designs.fractal import (
+    ConicalFractalFresnelLens,
+    FractalSoretZonePlate,
+    FractalWoodZonePlate,
+    SierpinskiCarpetZonePlate,
+    SierpinskiReflectarray,
+    SphericalFractalFresnelLens,
+)
 from .designs.metasurface import DualPolSharedAperture, MetasurfaceLens
 from .designs.offset import OffsetZonePlate
 from .designs.phase_correcting import PhaseCorrectingPlate
@@ -39,11 +47,14 @@ __all__ = [
     "CodedRIS",
     "CompositeAntenna",
     "ConformalPOSolver",
+    "ConicalFractalFresnelLens",
     "CurvilinearFresnel",
     "CylindricalFresnelLens",
     "DesignResult",
     "DualPolSharedAperture",
     "FoldedReflectarray",
+    "FractalSoretZonePlate",
+    "FractalWoodZonePlate",
     "HarmonicPOSolver",
     "Layer",
     "MetasurfaceLens",
@@ -53,7 +64,10 @@ __all__ = [
     "PlaneWave",
     "ReconfigurableArray",
     "Reflectarray",
+    "SierpinskiCarpetZonePlate",
+    "SierpinskiReflectarray",
     "SoretZonePlate",
+    "SphericalFractalFresnelLens",
     "SphericalFresnelLens",
     "SphericalWave",
     "TimeModulatedArray",

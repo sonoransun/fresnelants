@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Circle
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -486,6 +487,440 @@ def _measured_gallery(out_dir: Path) -> None:
     _save(fig, out_dir / "measured_roundtrip.png")
 
 
+def _annotate_axial_intensity(ax: object, F: float) -> None:
+    """Add labeled F, F/3, F/5 markers to a polyfocal axial-intensity axis."""
+    for k, label in ((1, "F"), (3, "F/3"), (5, "F/5")):
+        ax.axvline(1.0 / k, color="tab:red", linestyle=":", alpha=0.6)  # type: ignore[attr-defined]
+        ax.annotate(  # type: ignore[attr-defined]
+            label,
+            xy=(1.0 / k, 1.0),
+            xytext=(0.0, -8),
+            textcoords="offset points",
+            color="tab:red",
+            ha="center",
+            va="top",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+
+def _annotate_zone_layout_fig(fig: object, design: object, max_circles: int = 30) -> None:
+    """Overlay Fresnel zone radii as dashed circles on a plot_zone_layout figure."""
+    from fresnelants.core.geometry import fresnel_zone_radii
+    from fresnelants.units import freq_to_wavelength
+
+    lam = float(freq_to_wavelength(design.design_freq))  # type: ignore[attr-defined]
+    if not hasattr(design, "num_zones"):
+        return
+    n_zones = int(design.num_zones)  # type: ignore[attr-defined]
+    radii = fresnel_zone_radii(n_zones, design.focal_length, lam)  # type: ignore[attr-defined]
+    # Down-sample if there are too many zones to keep the figure readable.
+    step = max(1, n_zones // max_circles)
+    for i in range(0, n_zones, step):
+        r_mm = float(radii[i]) * 1e3
+        for ax in fig.axes:  # type: ignore[attr-defined]
+            ax.add_patch(
+                Circle(
+                    (0, 0),
+                    r_mm,
+                    fill=False,
+                    edgecolor="tab:cyan",
+                    linestyle=":",
+                    linewidth=0.4,
+                    alpha=0.7,
+                )
+            )
+    # Outer-zone label, in the corner of each subplot.
+    for ax in fig.axes:  # type: ignore[attr-defined]
+        try:
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+            ax.text(
+                xlim[1] * 0.95,
+                ylim[1] * 0.92,
+                f"n_max = {n_zones}",
+                ha="right",
+                va="top",
+                fontsize=8,
+                color="tab:cyan",
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "tab:cyan", "alpha": 0.85},
+            )
+        except Exception:
+            pass
+
+
+def _conformal_pattern_panel(
+    fig: object,
+    lens: object,
+    freq: float,
+    position: tuple[int, int, int],
+    *,
+    broadside_label: str = "main beam",
+) -> tuple[float, float]:
+    """Mesh + far-field 2-axis panel with feed marker + broadside arrow.
+
+    Returns (peak_dbi, peak_off_axis_norm) so the caller can compose titles.
+    """
+    from fresnelants.analysis.conformal_farfield import far_field_from_conformal
+
+    ap = lens.conformal_aperture(freq)  # type: ignore[attr-defined]
+    ff = far_field_from_conformal(ap, n_samples=64, chunk=4096)
+    pts = ap.points
+    mag = np.abs(ap.Et)
+    n_rows, n_cols, idx_3d = position
+
+    ax = fig.add_subplot(n_rows, n_cols, idx_3d, projection="3d")  # type: ignore[attr-defined]
+    sc = ax.scatter(
+        pts[:, 0] * 1e3,
+        pts[:, 1] * 1e3,
+        pts[:, 2] * 1e3,
+        c=mag,
+        cmap="magma",
+        s=4,
+    )
+    # Feed marker at the origin.
+    ax.scatter(
+        [0],
+        [0],
+        [0],
+        c="red",
+        s=80,
+        marker="*",
+        label="feed",
+        edgecolors="white",
+        linewidths=0.8,
+        zorder=10,
+    )
+    # Broadside arrow along +z.
+    z_max = float(np.max(pts[:, 2]) * 1e3)
+    ax.quiver(
+        0,
+        0,
+        z_max * 0.55,
+        0,
+        0,
+        z_max * 0.55,
+        color="lime",
+        arrow_length_ratio=0.25,
+        linewidth=2.0,
+        zorder=11,
+    )
+    ax.text(
+        0,
+        0,
+        z_max * 1.18,
+        broadside_label,
+        color="forestgreen",
+        ha="center",
+        va="bottom",
+        fontsize=9,
+        fontweight="bold",
+    )
+    ax.set_xlabel("x [mm]")
+    ax.set_ylabel("y [mm]")
+    ax.set_zlabel("z [mm]")
+    ax.set_title(f"{lens.name} mesh @ {freq / 1e9:.0f} GHz")  # type: ignore[attr-defined]
+    fig.colorbar(sc, ax=ax, shrink=0.6, label="|Et|")  # type: ignore[attr-defined]
+
+    ax2 = fig.add_subplot(n_rows, n_cols, idx_3d + 1)  # type: ignore[attr-defined]
+    d = ff.directivity()
+    d_db = 10 * np.log10(np.maximum(d, 1e-30))
+    im = ax2.imshow(
+        d_db,
+        extent=(ff.u[0], ff.u[-1], ff.v[0], ff.v[-1]),
+        origin="lower",
+        cmap="inferno",
+        vmin=d_db.max() - 30,
+        vmax=d_db.max(),
+    )
+    # Unit circle (visible-region boundary).
+    ax2.add_patch(Circle((0, 0), 1.0, fill=False, edgecolor="white", linewidth=0.6, linestyle="--"))
+    # Mark the on-axis (broadside) point and a θ=45° reference circle.
+    ax2.plot(0, 0, "+", color="lime", markersize=12, markeredgewidth=2)
+    ax2.add_patch(
+        Circle(
+            (0, 0),
+            np.sin(np.deg2rad(45.0)),
+            fill=False,
+            edgecolor="white",
+            linewidth=0.4,
+            linestyle=":",
+        )
+    )
+    ax2.text(
+        0,
+        np.sin(np.deg2rad(45.0)) + 0.03,
+        "θ=45°",
+        color="white",
+        ha="center",
+        va="bottom",
+        fontsize=8,
+    )
+    ax2.set_title(f"Far-field — peak {d_db.max():.1f} dBi")
+    ax2.set_xlabel(r"$u = \sin\theta\cos\phi$")
+    ax2.set_ylabel(r"$v = \sin\theta\sin\phi$")
+    ax2.set_aspect("equal")
+    fig.colorbar(im, ax=ax2, shrink=0.85, label="dBi")  # type: ignore[attr-defined]
+
+    iy, ix = np.unravel_index(int(np.argmax(d_db)), d_db.shape)
+    return float(d_db.max()), float(np.hypot(ff.u[ix], ff.v[iy]))
+
+
+def _fractal_gallery(out_dir: Path) -> None:
+    """Fractal Fresnel zone plate family — Cantor + Sierpinski + 3D variants."""
+    from fresnelants.analysis.nearfield import focal_axis_intensity
+    from fresnelants.core.geometry import make_aperture_grid
+    from fresnelants.units import freq_to_wavelength as _f2w
+
+    # 2D Cantor zone plates (binary + Devil's-lens phase). Use base_unit=2 so
+    # the Wood phase reversal materially differs from the Soret binary mask.
+    F, freq = 0.30, 30e9
+    soret = fa.FractalSoretZonePlate(focal_length=F, design_freq=freq, stage=2, base_unit=2)
+    wood = fa.FractalWoodZonePlate(focal_length=F, design_freq=freq, stage=2, base_unit=2)
+    solver = fa.PhysicalOpticsSolver(samples_per_wavelength=4.0, pad_factor=4)
+    res_w = solver.solve(wood, freq)
+
+    fig_s = plot_zone_layout(soret)
+    _annotate_zone_layout_fig(fig_s, soret)
+    _save(fig_s, out_dir / "fractal_cantor_soret_layout.png")
+    fig_w = plot_zone_layout(wood)
+    _annotate_zone_layout_fig(fig_w, wood)
+    _save(fig_w, out_dir / "fractal_cantor_wood_layout.png")
+    _save(plot_farfield_2d(res_w.far_field), out_dir / "fractal_cantor_farfield.png")
+    _save(
+        plot_principal_cuts(res_w.far_field, label="Cantor Wood stage 2 (base 2), 30 GHz"),
+        out_dir / "fractal_cantor_cuts.png",
+    )
+
+    # Headline polyfocal-signature plot — labeled F, F/3, F/5 markers.
+    F2, freq2 = 0.30, 30e9
+    cantor = fa.FractalSoretZonePlate(focal_length=F2, design_freq=freq2, stage=3, base_unit=1)
+    classical = fa.WoodZonePlate(focal_length=F2, design_freq=freq2, num_zones=27)
+    ap_cantor = cantor.aperture_field(freq2, samples_per_wavelength=4.0, margin=1.1)
+    ap_classical = classical.aperture_field(freq2, samples_per_wavelength=4.0, margin=1.1)
+    z_grid = np.linspace(0.05 * F2, 1.3 * F2, 120)
+    I_cantor = focal_axis_intensity(ap_cantor, z_grid)
+    I_classical = focal_axis_intensity(ap_classical, z_grid)
+    fig, ax = plt.subplots(figsize=(8, 4.4))
+    ax.plot(
+        z_grid / F2,
+        I_cantor / I_cantor.max(),
+        color="tab:purple",
+        linewidth=1.4,
+        label=f"Cantor stage 3 ({cantor.num_zones} zones)",
+    )
+    ax.plot(
+        z_grid / F2,
+        I_classical / I_classical.max(),
+        color="tab:gray",
+        linestyle="--",
+        linewidth=1.0,
+        label=f"Classical Wood ({classical.num_zones} zones)",
+    )
+    _annotate_axial_intensity(ax, F2)
+    ax.axhline(0.5, color="tab:gray", linestyle=":", alpha=0.4)
+    ax.text(1.25, 0.51, "−3 dB", color="tab:gray", fontsize=8, ha="right", va="bottom")
+    ax.set_xlabel("z / F")
+    ax.set_ylabel("|E(0,0,z)|²  (normalized)")
+    ax.set_title("Polyfocal signature of the Cantor zone plate")
+    ax.legend(loc="upper right")
+    ax.set_xlim(0, 1.3)
+    ax.set_ylim(0, 1.08)
+    fig.tight_layout()
+    _save(fig, out_dir / "fractal_cantor_axial_intensity.png")
+
+    # Sierpinski carpet (Cartesian fractal mask).
+    carpet = fa.SierpinskiCarpetZonePlate(
+        focal_length=0.5, design_freq=30e9, stage=3, aperture_side=0.18
+    )
+    res_c = solver.solve(carpet, 30e9)
+    _save(plot_zone_layout(carpet), out_dir / "fractal_sierpinski_layout.png")
+    _save(plot_farfield_2d(res_c.far_field), out_dir / "fractal_sierpinski_farfield.png")
+
+    # Sierpinski reflectarray.
+    sra = fa.SierpinskiReflectarray(
+        focal_length=0.20, design_freq=28e9, nx=27, ny=27, fractal_stage=2
+    )
+    res_sra = solver.solve(sra, 28e9)
+    _save(plot_zone_layout(sra), out_dir / "fractal_sierpinski_reflectarray_layout.png")
+    _save(
+        plot_farfield_2d(res_sra.far_field),
+        out_dir / "fractal_sierpinski_reflectarray_farfield.png",
+    )
+
+    # 3D conformal fractal lenses (use updated nu=128 default for clean Nyquist).
+    sph_lens = fa.SphericalFractalFresnelLens(
+        radius=0.05,
+        cap_angle_deg=90.0,
+        design_freq=77e9,
+        stage=2,
+    )
+    cone_lens = fa.ConicalFractalFresnelLens(
+        half_angle_deg=45.0,
+        height=0.05,
+        design_freq=77e9,
+        stage=2,
+    )
+    fig = plt.figure(figsize=(11, 4.6))
+    _conformal_pattern_panel(fig, sph_lens, 77e9, (1, 2, 1), broadside_label="main beam ↑")
+    fig.tight_layout()
+    _save(fig, out_dir / "fractal_3d_spherical.png")
+
+    fig = plt.figure(figsize=(11, 4.6))
+    _conformal_pattern_panel(fig, cone_lens, 77e9, (1, 2, 1), broadside_label="cone axis ↑")
+    fig.tight_layout()
+    _save(fig, out_dir / "fractal_3d_conical.png")
+
+    # NEW: Cantor stage-evolution figure.
+    fig, axes = plt.subplots(2, 3, figsize=(13, 6.5))
+    for col, stage in enumerate((1, 2, 3)):
+        zp = fa.FractalSoretZonePlate(focal_length=F2, design_freq=freq2, stage=stage)
+        # Mask panel.
+        ext = 2.0 * zp.aperture_radius * 1.05
+        lam = float(_f2w(freq2))
+        grid_s = make_aperture_grid(ext, max(2.0, 500 * lam / ext), lam)
+        T = zp.transmittance(grid_s, freq2)
+        ax_m = axes[0, col]
+        ax_m.imshow(
+            np.abs(T),
+            extent=(grid_s.x[0] * 1e3, grid_s.x[-1] * 1e3, grid_s.y[0] * 1e3, grid_s.y[-1] * 1e3),
+            origin="lower",
+            cmap="gray_r",
+        )
+        retained = 2**stage
+        total = 3**stage
+        ax_m.set_title(f"Stage {stage}  ({retained} retained / {total} zones)")
+        ax_m.set_xlabel("x [mm]")
+        ax_m.set_ylabel("y [mm]")
+        # Axial-intensity panel below.
+        ap_s = zp.aperture_field(freq2, samples_per_wavelength=4.0, margin=1.1)
+        z_s = np.linspace(0.05 * F2, 1.3 * F2, 100)
+        I_s = focal_axis_intensity(ap_s, z_s)
+        ax_a = axes[1, col]
+        ax_a.plot(z_s / F2, I_s / I_s.max(), color="tab:purple", linewidth=1.2)
+        _annotate_axial_intensity(ax_a, F2)
+        ax_a.set_xlabel("z / F")
+        ax_a.set_ylabel("|E|²  (norm.)")
+        ax_a.set_xlim(0, 1.3)
+        ax_a.set_ylim(0, 1.08)
+    fig.suptitle("Cantor zone plate — stage evolution and polyfocal structure")
+    fig.tight_layout()
+    _save(fig, out_dir / "fractal_cantor_stages.png")
+
+    # NEW: base_unit comparison figure (4 panels: Soret/Wood × base 1/2).
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    for col, base_unit in enumerate((1, 2)):
+        s_zp = fa.FractalSoretZonePlate(
+            focal_length=F2, design_freq=freq2, stage=2, base_unit=base_unit
+        )
+        w_zp = fa.FractalWoodZonePlate(
+            focal_length=F2, design_freq=freq2, stage=2, base_unit=base_unit
+        )
+        for row, (name, zp) in enumerate((("Soret", s_zp), ("Wood", w_zp))):
+            ext = 2.0 * zp.aperture_radius * 1.05
+            lam = float(_f2w(freq2))
+            grid_s = make_aperture_grid(ext, max(2.0, 400 * lam / ext), lam)
+            T = zp.transmittance(grid_s, freq2)
+            ax = axes[row, col]
+            cmap = "gray_r" if name == "Soret" else "RdBu"
+            vmin, vmax = (0.0, 1.0) if name == "Soret" else (-1.0, 1.0)
+            ax.imshow(
+                np.real(T),
+                extent=(
+                    grid_s.x[0] * 1e3,
+                    grid_s.x[-1] * 1e3,
+                    grid_s.y[0] * 1e3,
+                    grid_s.y[-1] * 1e3,
+                ),
+                origin="lower",
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+            )
+            d_db = solver.solve(zp, freq2).far_field.peak_directivity_dbi()
+            ax.set_title(f"{name}  base_unit={base_unit}  →  D = {d_db:.1f} dBi")
+            ax.set_xlabel("x [mm]")
+            if col == 0:
+                ax.set_ylabel("y [mm]")
+    fig.suptitle(
+        "Cantor base_unit comparison (stage 2)\n"
+        "base_unit=1 → all retained zones odd → Soret ≡ Wood   |   "
+        "base_unit=2 → Wood phase reversal recaptures even-zone energy"
+    )
+    fig.tight_layout()
+    _save(fig, out_dir / "fractal_cantor_baseunit_comparison.png")
+
+    # Hero composite: Cantor mask + polyfocal trace + spherical 3D pattern.
+    fig = plt.figure(figsize=(13, 4.4))
+    # 1) Cantor mask
+    ax1 = fig.add_subplot(1, 3, 1)
+    grid_extent = 2.0 * cantor.aperture_radius * 1.05
+    lam = float(_f2w(freq2))
+    grid = make_aperture_grid(grid_extent, max(2.0, 600 * lam / grid_extent), lam)
+    T = cantor.transmittance(grid, freq2)
+    ax1.imshow(
+        np.abs(T),
+        extent=(grid.x[0] * 1e3, grid.x[-1] * 1e3, grid.y[0] * 1e3, grid.y[-1] * 1e3),
+        origin="lower",
+        cmap="gray_r",
+    )
+    ax1.set_title(f"Cantor mask, stage 3 ({cantor.num_zones} zones)")
+    ax1.set_xlabel("x [mm]")
+    ax1.set_ylabel("y [mm]")
+    # 2) Polyfocal axial trace
+    ax2 = fig.add_subplot(1, 3, 2)
+    ax2.plot(z_grid / F2, I_cantor / I_cantor.max(), color="tab:purple", linewidth=1.4)
+    _annotate_axial_intensity(ax2, F2)
+    ax2.set_xlabel("z / F")
+    ax2.set_ylabel("|E(0,0,z)|²  (normalized)")
+    ax2.set_title("Polyfocal axial signature")
+    ax2.set_xlim(0, 1.3)
+    ax2.set_ylim(0, 1.08)
+    ax2.text(
+        0.65,
+        0.88,
+        "Cantor zone plates focus\nat F, F/3, F/5, …",
+        transform=ax2.transAxes,
+        ha="left",
+        va="top",
+        fontsize=9,
+        color="tab:purple",
+        bbox={"boxstyle": "round,pad=0.3", "fc": "white", "ec": "tab:purple", "alpha": 0.85},
+    )
+    # 3) Spherical 3D pattern
+    sph = fa.SphericalFractalFresnelLens(
+        radius=0.05,
+        cap_angle_deg=90.0,
+        design_freq=77e9,
+        stage=2,
+    )
+    from fresnelants.analysis.conformal_farfield import far_field_from_conformal as _ffc
+
+    ap_sph = sph.conformal_aperture(77e9)
+    ff_sph = _ffc(ap_sph, n_samples=64, chunk=4096)
+    d = ff_sph.directivity()
+    d_db = 10 * np.log10(np.maximum(d, 1e-30))
+    ax3 = fig.add_subplot(1, 3, 3)
+    im = ax3.imshow(
+        d_db,
+        extent=(ff_sph.u[0], ff_sph.u[-1], ff_sph.v[0], ff_sph.v[-1]),
+        origin="lower",
+        cmap="inferno",
+        vmin=d_db.max() - 30,
+        vmax=d_db.max(),
+    )
+    ax3.add_patch(Circle((0, 0), 1.0, fill=False, edgecolor="white", linewidth=0.6, linestyle="--"))
+    ax3.plot(0, 0, "+", color="lime", markersize=12, markeredgewidth=2)
+    ax3.set_title(f"Spherical fractal lens — peak {d_db.max():.1f} dBi")
+    ax3.set_xlabel(r"$u$")
+    ax3.set_ylabel(r"$v$")
+    ax3.set_aspect("equal")
+    fig.colorbar(im, ax=ax3, shrink=0.85, label="dBi")
+    fig.suptitle("FresnelAnts — fractal Fresnel zone plate family")
+    fig.tight_layout()
+    _save(fig, out_dir / "fractal_hero.png")
+
+
 def main(out_dir: Path | str | None = None) -> None:
     target = Path(out_dir) if out_dir else ROOT / "docs" / "img"
     target.mkdir(parents=True, exist_ok=True)
@@ -503,6 +938,7 @@ def main(out_dir: Path | str | None = None) -> None:
     _timemod_gallery(target)
     _synth_gallery(target)
     _measured_gallery(target)
+    _fractal_gallery(target)
     print(f"Done. {len(list(target.glob('*.png')))} PNGs written.")
 
 

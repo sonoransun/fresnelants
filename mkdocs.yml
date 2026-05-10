@@ -54,3 +54,5 @@ nav:
       - Time-modulated arrays: extensions/timemod.md
       - Phase synthesis: extensions/synth.md
       - Hardware in the loop: extensions/hardware.md
+  - Extensions (v0.4):
+      - Fractal (Cantor / Sierpinski): designs/fractal.md

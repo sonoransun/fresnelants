@@ -9,6 +9,14 @@ from pydantic import BaseModel, Field, field_validator
 from ..core.materials import HDPE, LIBRARY, Dielectric
 from ..designs.base import AntennaDesign
 from ..designs.curvilinear import CurvilinearFresnel, ProfileKind
+from ..designs.fractal import (
+    ConicalFractalFresnelLens,
+    FractalSoretZonePlate,
+    FractalWoodZonePlate,
+    SierpinskiCarpetZonePlate,
+    SierpinskiReflectarray,
+    SphericalFractalFresnelLens,
+)
 from ..designs.offset import OffsetZonePlate
 from ..designs.phase_correcting import PhaseCorrectingPlate
 from ..designs.reflectarray import Reflectarray
@@ -136,8 +144,138 @@ class CurvilinearSpec(_Base):
         )
 
 
+class FractalSoretSpec(_Base):
+    kind: Literal["fractal_soret"] = "fractal_soret"
+    stage: int = Field(3, ge=0, le=6)
+    base_unit: int = Field(1, ge=1)
+
+    def build(self) -> FractalSoretZonePlate:
+        return FractalSoretZonePlate(
+            focal_length=self.focal_length,
+            design_freq=self.design_freq,
+            stage=self.stage,
+            base_unit=self.base_unit,
+        )
+
+
+class FractalWoodSpec(_Base):
+    kind: Literal["fractal_wood"] = "fractal_wood"
+    stage: int = Field(3, ge=0, le=6)
+    base_unit: int = Field(1, ge=1)
+
+    def build(self) -> FractalWoodZonePlate:
+        return FractalWoodZonePlate(
+            focal_length=self.focal_length,
+            design_freq=self.design_freq,
+            stage=self.stage,
+            base_unit=self.base_unit,
+        )
+
+
+class SierpinskiSpec(_Base):
+    kind: Literal["sierpinski"] = "sierpinski"
+    stage: int = Field(3, ge=0, le=5)
+    aperture_side: float = Field(0.20, gt=0)
+
+    def build(self) -> SierpinskiCarpetZonePlate:
+        return SierpinskiCarpetZonePlate(
+            focal_length=self.focal_length,
+            design_freq=self.design_freq,
+            stage=self.stage,
+            aperture_side=self.aperture_side,
+        )
+
+
+class SierpinskiReflectarraySpec(_Base):
+    kind: Literal["sierpinski_reflectarray"] = "sierpinski_reflectarray"
+    nx: int = Field(27, ge=1)
+    ny: int = Field(27, ge=1)
+    cell_size: float = Field(0.0, ge=0)
+    fractal_stage: int = Field(2, ge=0, le=4)
+    feed_offset: tuple[float, float] = (0.0, 0.0)
+    beam_theta_deg: float = 0.0
+    beam_phi_deg: float = 0.0
+    feed_q: float = 6.0
+
+    def build(self) -> SierpinskiReflectarray:
+        import math
+
+        return SierpinskiReflectarray(
+            focal_length=self.focal_length,
+            design_freq=self.design_freq,
+            nx=self.nx,
+            ny=self.ny,
+            cell_size=self.cell_size,
+            feed_offset=self.feed_offset,
+            beam_direction=(math.radians(self.beam_theta_deg), math.radians(self.beam_phi_deg)),
+            feed_q=self.feed_q,
+            fractal_stage=self.fractal_stage,
+        )
+
+
+class SphericalFractalSpec(BaseModel):
+    model_config = {"extra": "forbid"}
+    kind: Literal["spherical_fractal"] = "spherical_fractal"
+    design_freq: float = Field(..., gt=0)
+    radius: float = Field(0.05, gt=0)
+    cap_angle_deg: float = Field(90.0, gt=0, le=180)
+    stage: int = Field(2, ge=0, le=4)
+    base_unit: int = Field(1, ge=1)
+    phase_reversal: bool = True
+    nu: int = Field(128, ge=4)
+    nv: int = Field(40, ge=4)
+
+    def build(self) -> SphericalFractalFresnelLens:
+        return SphericalFractalFresnelLens(
+            radius=self.radius,
+            cap_angle_deg=self.cap_angle_deg,
+            design_freq=self.design_freq,
+            stage=self.stage,
+            base_unit=self.base_unit,
+            phase_reversal=self.phase_reversal,
+            nu=self.nu,
+            nv=self.nv,
+        )
+
+
+class ConicalFractalSpec(BaseModel):
+    model_config = {"extra": "forbid"}
+    kind: Literal["conical_fractal"] = "conical_fractal"
+    design_freq: float = Field(..., gt=0)
+    half_angle_deg: float = Field(45.0, gt=0, lt=90)
+    height: float = Field(0.05, gt=0)
+    stage: int = Field(2, ge=0, le=4)
+    base_unit: int = Field(1, ge=1)
+    phase_reversal: bool = True
+    nu: int = Field(128, ge=4)
+    nv: int = Field(60, ge=4)
+
+    def build(self) -> ConicalFractalFresnelLens:
+        return ConicalFractalFresnelLens(
+            half_angle_deg=self.half_angle_deg,
+            height=self.height,
+            design_freq=self.design_freq,
+            stage=self.stage,
+            base_unit=self.base_unit,
+            phase_reversal=self.phase_reversal,
+            nu=self.nu,
+            nv=self.nv,
+        )
+
+
 DesignSpec = (
-    SoretSpec | WoodSpec | OffsetSpec | PhaseCorrectingSpec | ReflectarraySpec | CurvilinearSpec
+    SoretSpec
+    | WoodSpec
+    | OffsetSpec
+    | PhaseCorrectingSpec
+    | ReflectarraySpec
+    | CurvilinearSpec
+    | FractalSoretSpec
+    | FractalWoodSpec
+    | SierpinskiSpec
+    | SierpinskiReflectarraySpec
+    | SphericalFractalSpec
+    | ConicalFractalSpec
 )
 
 
@@ -158,6 +296,12 @@ _REGISTRY: dict[str, type[BaseModel]] = {
     "phase_correcting": PhaseCorrectingSpec,
     "reflectarray": ReflectarraySpec,
     "curvilinear": CurvilinearSpec,
+    "fractal_soret": FractalSoretSpec,
+    "fractal_wood": FractalWoodSpec,
+    "sierpinski": SierpinskiSpec,
+    "sierpinski_reflectarray": SierpinskiReflectarraySpec,
+    "spherical_fractal": SphericalFractalSpec,
+    "conical_fractal": ConicalFractalSpec,
 }
 
 
@@ -170,4 +314,4 @@ def spec_from_dict(data: dict[str, Any]) -> AntennaDesign:
         raise ValueError(f"Unknown design kind {kind!r}")
     spec_cls = _REGISTRY[kind]
     spec = spec_cls.model_validate(data)
-    return spec.build()  # type: ignore[no-any-return]
+    return spec.build()  # type: ignore[attr-defined,no-any-return]

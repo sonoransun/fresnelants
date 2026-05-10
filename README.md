@@ -9,6 +9,23 @@ from one `pip install`.
 
 ![Hero figure](docs/img/hero.png)
 
+## v0.4 highlights
+
+Fractal Fresnel zone plates — six new families built from triadic Cantor
+and Sierpinski-carpet generators applied to the Fresnel zone construction.
+
+| New design | Headline property |
+|---|---|
+| `FractalSoretZonePlate` / `FractalWoodZonePlate` | Cantor binary + Devil's-lens phase, polyfocal at z = F, F/3, F/5, … |
+| `SierpinskiCarpetZonePlate` | Cartesian self-similar mask, 4-fold-symmetric far-field |
+| `SierpinskiReflectarray` | Fractal-tiled microstrip array (`8^stage` active cells out of `9^stage`) |
+| `SphericalFractalFresnelLens` | 3D conformal Cantor zoning on a hemispherical cap |
+| `ConicalFractalFresnelLens` | 3D conformal Cantor zoning on a cone — axicon-style ring beam |
+
+| Fractal hero | Polyfocal axial signature |
+|---|---|
+| ![Fractal hero](docs/img/fractal_hero.png) | ![Polyfocal](docs/img/fractal_cantor_axial_intensity.png) |
+
 ## v0.2 highlights
 
 | Direction | What's new |
@@ -171,6 +188,22 @@ plot_farfield_2d(result.far_field).savefig("farfield.png")
 | 3D surface | 3D pattern | Focal-region intensity |
 |---|---|---|
 | ![](docs/img/curvilinear_surface_3d.png) | ![](docs/img/curvilinear_3d_pattern.png) | ![](docs/img/curvilinear_focal_region.png) |
+
+### Fractal Fresnel zone plates (Cantor + Sierpinski + 3D conformal)
+
+Cantor binary mask, Devil's-lens phase variant, polyfocal axial signature,
+and Cantor far-field at 30 GHz, F = 0.30 m:
+
+| Cantor Soret | Cantor Wood (Devil's lens) | Polyfocal axial intensity | Cantor far-field |
+|---|---|---|---|
+| ![](docs/img/fractal_cantor_soret_layout.png) | ![](docs/img/fractal_cantor_wood_layout.png) | ![](docs/img/fractal_cantor_axial_intensity.png) | ![](docs/img/fractal_cantor_farfield.png) |
+
+Sierpinski carpet (30 GHz), Sierpinski reflectarray (28 GHz), spherical
+fractal lens (77 GHz), conical fractal lens (77 GHz axicon):
+
+| Sierpinski mask | Sierpinski reflectarray | Spherical fractal lens | Conical fractal lens |
+|---|---|---|---|
+| ![](docs/img/fractal_sierpinski_layout.png) | ![](docs/img/fractal_sierpinski_reflectarray_layout.png) | ![](docs/img/fractal_3d_spherical.png) | ![](docs/img/fractal_3d_conical.png) |
 
 ## CLI
 

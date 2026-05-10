@@ -1,0 +1,5 @@
+kind: fractal_wood
+focal_length: 1.0
+design_freq: 10.0e9
+stage: 2
+base_unit: 2

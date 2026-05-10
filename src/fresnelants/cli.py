@@ -31,11 +31,17 @@ from .export.gerber import write_reflectarray_gerber
 from .export.stl import export_stl
 from .io.loaders import load_design
 from .io.specs import (
+    ConicalFractalSpec,
     CurvilinearSpec,
+    FractalSoretSpec,
+    FractalWoodSpec,
     OffsetSpec,
     PhaseCorrectingSpec,
     ReflectarraySpec,
+    SierpinskiReflectarraySpec,
+    SierpinskiSpec,
     SoretSpec,
+    SphericalFractalSpec,
     WoodSpec,
 )
 from .solvers.physical_optics import PhysicalOpticsSolver
@@ -171,6 +177,101 @@ def design_curvilinear(
         dielectric=dielectric,
         axicon_angle_deg=axicon_deg,
     )
+    _write_spec(spec, out)
+
+
+@design_app.command("fractal")
+def design_fractal(
+    freq: Annotated[float, typer.Option(help="Design frequency [Hz].")],
+    focal_length: Annotated[float, typer.Option("--focal-length", "-F", help="Focal length [m].")],
+    stage: Annotated[int, typer.Option(help="Cantor / Sierpinski iteration depth.")] = 3,
+    kind: Annotated[
+        str,
+        typer.Option(
+            help="'soret' (Cantor binary) | 'wood' (Cantor phase / Devil's lens) | "
+            "'sierpinski' (square carpet) | 'sierpinski_reflectarray'."
+        ),
+    ] = "wood",
+    aperture_side: Annotated[
+        float, typer.Option(help="Side length [m] for Sierpinski-carpet variant.")
+    ] = 0.20,
+    nx: Annotated[int, typer.Option(help="Cell count for Sierpinski reflectarray.")] = 27,
+    ny: Annotated[int, typer.Option(help="Cell count for Sierpinski reflectarray.")] = 27,
+    out: Annotated[Path, typer.Option(help="Output JSON/YAML path.")] = Path("fractal.json"),
+) -> None:
+    """Synthesize a 2D fractal Fresnel design (Cantor or Sierpinski)."""
+    if kind == "soret":
+        spec: object = FractalSoretSpec(
+            focal_length=focal_length, design_freq=freq, stage=stage, base_unit=1
+        )
+    elif kind == "wood":
+        spec = FractalWoodSpec(
+            focal_length=focal_length, design_freq=freq, stage=stage, base_unit=1
+        )
+    elif kind == "sierpinski":
+        spec = SierpinskiSpec(
+            focal_length=focal_length,
+            design_freq=freq,
+            stage=stage,
+            aperture_side=aperture_side,
+        )
+    elif kind == "sierpinski_reflectarray":
+        spec = SierpinskiReflectarraySpec(
+            focal_length=focal_length,
+            design_freq=freq,
+            nx=nx,
+            ny=ny,
+            cell_size=0.0,
+            fractal_stage=stage,
+        )
+    else:
+        raise typer.BadParameter(
+            "kind must be 'soret' | 'wood' | 'sierpinski' | 'sierpinski_reflectarray'."
+        )
+    _write_spec(spec, out)
+
+
+@design_app.command("fractal-3d")
+def design_fractal_3d(
+    freq: Annotated[float, typer.Option(help="Design frequency [Hz].")],
+    substrate: Annotated[
+        str, typer.Option(help="'spherical' (cap) | 'conical' (cone).")
+    ] = "spherical",
+    radius: Annotated[float, typer.Option(help="Sphere radius [m].")] = 0.05,
+    cap_angle_deg: Annotated[float, typer.Option(help="Spherical cap half-angle [deg].")] = 90.0,
+    half_angle_deg: Annotated[float, typer.Option(help="Cone half-angle from axis [deg].")] = 45.0,
+    height: Annotated[float, typer.Option(help="Cone axial height [m].")] = 0.05,
+    stage: Annotated[int, typer.Option(help="Cantor iteration depth.")] = 2,
+    phase_reversal: Annotated[
+        bool, typer.Option(help="True for Devil's lens phase, False for Soret-binary.")
+    ] = True,
+    out: Annotated[Path, typer.Option()] = Path("fractal_3d.json"),
+) -> None:
+    """Synthesize a 3D conformal fractal Fresnel lens (spherical or conical)."""
+    if substrate == "spherical":
+        spec: object = SphericalFractalSpec(
+            design_freq=freq,
+            radius=radius,
+            cap_angle_deg=cap_angle_deg,
+            stage=stage,
+            base_unit=1,
+            phase_reversal=phase_reversal,
+            nu=128,
+            nv=40,
+        )
+    elif substrate == "conical":
+        spec = ConicalFractalSpec(
+            design_freq=freq,
+            half_angle_deg=half_angle_deg,
+            height=height,
+            stage=stage,
+            base_unit=1,
+            phase_reversal=phase_reversal,
+            nu=128,
+            nv=60,
+        )
+    else:
+        raise typer.BadParameter("substrate must be 'spherical' or 'conical'.")
     _write_spec(spec, out)
 
 

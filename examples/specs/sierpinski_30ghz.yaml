@@ -1,0 +1,5 @@
+kind: sierpinski
+focal_length: 0.5
+design_freq: 30.0e9
+stage: 3
+aperture_side: 0.18

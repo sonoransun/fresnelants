@@ -26,6 +26,7 @@ from .designs.fractal import (
     SierpinskiReflectarray,
     SphericalFractalFresnelLens,
 )
+from .designs.macro_array import MacroArrayResult, MacroFresnelArray
 from .designs.metasurface import DualPolSharedAperture, MetasurfaceLens
 from .designs.offset import OffsetZonePlate
 from .designs.phase_correcting import PhaseCorrectingPlate
@@ -57,6 +58,8 @@ __all__ = [
     "FractalWoodZonePlate",
     "HarmonicPOSolver",
     "Layer",
+    "MacroArrayResult",
+    "MacroFresnelArray",
     "MetasurfaceLens",
     "OffsetZonePlate",
     "PhaseCorrectingPlate",

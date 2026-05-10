@@ -17,6 +17,7 @@ from ..designs.fractal import (
     SierpinskiReflectarray,
     SphericalFractalFresnelLens,
 )
+from ..designs.macro_array import MacroFresnelArray
 from ..designs.offset import OffsetZonePlate
 from ..designs.phase_correcting import PhaseCorrectingPlate
 from ..designs.reflectarray import Reflectarray
@@ -263,6 +264,48 @@ class ConicalFractalSpec(BaseModel):
         )
 
 
+class MacroArraySpec(BaseModel):
+    model_config = {"extra": "forbid"}
+    kind: Literal["macro_array"] = "macro_array"
+    element: dict[str, Any] = Field(
+        ..., description="Nested design spec dict (with its own 'kind') for the prototype element."
+    )
+    lattice: Literal["linear", "rect", "hex", "ring"] = "linear"
+    n_elements: int = Field(..., ge=1)
+    spacing_m: float = Field(..., gt=0)
+    rows: int | None = Field(None, ge=1, description="Row count for 'rect' lattice; auto if None.")
+    bits: int = Field(
+        0, ge=0, le=8, description="0=continuous; otherwise quantize to 2^bits phases."
+    )
+    coupling_q: float = Field(0.0, ge=0.0)
+    beam_theta_deg: float = 0.0
+    beam_phi_deg: float = 0.0
+
+    def build(self) -> MacroFresnelArray:
+        from ..core.geometry import element_lattice_positions
+
+        # Build the prototype element via spec_from_dict (recursive dispatch).
+        element = spec_from_dict(self.element)
+        positions = element_lattice_positions(
+            self.n_elements,
+            self.spacing_m,
+            self.lattice,
+            rows=self.rows,
+        )
+        macro = MacroFresnelArray(
+            element=element,
+            element_positions=positions,
+            coupling_q=self.coupling_q,
+        )
+        # Pre-compute weights for the requested beam direction.
+        macro.weights = macro.weights_for_beam(
+            self.beam_theta_deg,
+            self.beam_phi_deg,
+            bits=self.bits,
+        )
+        return macro
+
+
 DesignSpec = (
     SoretSpec
     | WoodSpec
@@ -276,6 +319,7 @@ DesignSpec = (
     | SierpinskiReflectarraySpec
     | SphericalFractalSpec
     | ConicalFractalSpec
+    | MacroArraySpec
 )
 
 
@@ -302,6 +346,7 @@ _REGISTRY: dict[str, type[BaseModel]] = {
     "sierpinski_reflectarray": SierpinskiReflectarraySpec,
     "spherical_fractal": SphericalFractalSpec,
     "conical_fractal": ConicalFractalSpec,
+    "macro_array": MacroArraySpec,
 }
 
 

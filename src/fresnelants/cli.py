@@ -35,6 +35,7 @@ from .io.specs import (
     CurvilinearSpec,
     FractalSoretSpec,
     FractalWoodSpec,
+    MacroArraySpec,
     OffsetSpec,
     PhaseCorrectingSpec,
     ReflectarraySpec,
@@ -275,6 +276,54 @@ def design_fractal_3d(
     _write_spec(spec, out)
 
 
+@design_app.command("macro-array")
+def design_macro_array(
+    freq: Annotated[float, typer.Option(help="Design frequency [Hz].")],
+    element_spec: Annotated[
+        Path, typer.Option(help="Path to a YAML/JSON spec for the prototype element.")
+    ],
+    lattice: Annotated[str, typer.Option(help="'linear' | 'rect' | 'hex' | 'ring'.")] = "linear",
+    n_elements: Annotated[int, typer.Option(help="Number of elements (4, 8, 16, 128, …).")] = 8,
+    spacing: Annotated[
+        float, typer.Option(help="Centre-to-centre spacing in wavelengths (default 1.5).")
+    ] = 1.5,
+    rows: Annotated[
+        int | None, typer.Option(help="Row count for 'rect' lattice (auto if omitted).")
+    ] = None,
+    bits: Annotated[
+        int, typer.Option(help="0=continuous; otherwise quantize weights to 2^bits phases.")
+    ] = 0,
+    coupling_q: Annotated[
+        float, typer.Option(help="Mutual-coupling correction strength (0=disabled).")
+    ] = 0.0,
+    beam_theta_deg: Annotated[float, typer.Option(help="Receive beam θ_b [deg].")] = 0.0,
+    beam_phi_deg: Annotated[float, typer.Option(help="Receive beam φ_b [deg].")] = 0.0,
+    out: Annotated[Path, typer.Option(help="Output JSON/YAML path.")] = Path("macro_array.json"),
+) -> None:
+    """Synthesize a macro array of Fresnel-antenna elements (phased-array receiver)."""
+    import json
+
+    import yaml
+
+    raw = element_spec.read_text(encoding="utf-8")
+    element_dict = (
+        yaml.safe_load(raw) if element_spec.suffix.lower() in {".yaml", ".yml"} else json.loads(raw)
+    )
+    wavelength = 3.0e8 / freq
+    spec = MacroArraySpec(
+        element=element_dict,
+        lattice=lattice,  # type: ignore[arg-type]
+        n_elements=n_elements,
+        spacing_m=spacing * wavelength,
+        rows=rows,
+        bits=bits,
+        coupling_q=coupling_q,
+        beam_theta_deg=beam_theta_deg,
+        beam_phi_deg=beam_phi_deg,
+    )
+    _write_spec(spec, out)
+
+
 @app.command("analyze")
 def analyze(
     spec: Annotated[Path, typer.Argument(help="Path to a design spec (YAML/JSON).")],
@@ -282,10 +331,15 @@ def analyze(
     samples_per_wavelength: Annotated[float, typer.Option()] = 6.0,
 ) -> None:
     """Run the physical-optics solver and print performance metrics."""
+    from .designs.macro_array import MacroFresnelArray
+
     design = load_design(spec)
     f = freq if freq is not None else design.design_freq
     solver = PhysicalOpticsSolver(samples_per_wavelength=samples_per_wavelength)
-    result = solver.solve(design, f)
+    if isinstance(design, MacroFresnelArray):
+        result = design.solve(solver, f)
+    else:
+        result = solver.solve(design, f)
     ff = result.far_field
 
     physical_area = math.pi * design.aperture_radius**2

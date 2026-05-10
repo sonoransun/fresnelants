@@ -1,0 +1,14 @@
+kind: macro_array
+element:
+  kind: reflectarray
+  focal_length: 0.20
+  design_freq: 28.0e9
+  nx: 8
+  ny: 8
+lattice: rect
+n_elements: 16
+rows: 4
+spacing_m: 0.05
+bits: 4
+beam_theta_deg: 5.0
+beam_phi_deg: 0.0

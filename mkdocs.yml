@@ -56,3 +56,5 @@ nav:
       - Hardware in the loop: extensions/hardware.md
   - Extensions (v0.4):
       - Fractal (Cantor / Sierpinski): designs/fractal.md
+  - Extensions (v0.5):
+      - Macro arrays of Fresnel elements: designs/macro_array.md

@@ -9,6 +9,27 @@ from one `pip install`.
 
 ![Hero figure](docs/img/hero.png)
 
+## v0.5 highlights
+
+`MacroFresnelArray` — phased arrays whose elements are themselves
+complete Fresnel antennas. Each element is a zone plate / reflectarray /
+conformal lens / fractal (any `AntennaDesign` subclass), combined with
+complex per-element weights to form receive beams via the textbook
+**array-factor × element-pattern** decomposition. Scales to N=128+
+without FFT-cost growth.
+
+| New feature | Description |
+|---|---|
+| `MacroFresnelArray(element, element_positions, weights)` | N-element phased array of identical Fresnel elements |
+| `from_lattice(...)` | Convenience constructor for `linear` / `rect` / `hex` / `ring` lattices |
+| `weights_for_beam(θ, φ, bits=N)` | Conjugate-matched receive weights, optionally N-bit-quantized |
+| `beam_codebook(directions, ...)` | Multi-beam codebook for receive arrays |
+| `coupling_q` | Heuristic mutual-coupling first-order correction |
+
+| 4× linear (10 GHz) | 16× rect 4×4 (28 GHz) | 128× hex (30 GHz) | Multi-beam codebook |
+|---|---|---|---|
+| ![](docs/img/macro_array_4x_linear_layout.png) | ![](docs/img/macro_array_16x_rect_pattern.png) | ![](docs/img/macro_array_128x_hex_pattern.png) | ![](docs/img/macro_array_16x_codebook.png) |
+
 ## v0.4 highlights
 
 Fractal Fresnel zone plates — six new families built from triadic Cantor

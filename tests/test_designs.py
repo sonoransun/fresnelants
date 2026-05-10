@@ -230,6 +230,189 @@ def test_sierpinski_reflectarray_zeros_inactive_cells(
     assert res.far_field.peak_directivity_dbi() > 15.0
 
 
+def test_lattice_geometry_helpers() -> None:
+    from fresnelants.core.geometry import element_lattice_positions
+
+    # linear
+    pts = element_lattice_positions(4, spacing_m=0.05, lattice="linear")
+    assert pts.shape == (4, 2)
+    np.testing.assert_allclose(np.diff(pts[:, 0]), 0.05)
+    np.testing.assert_allclose(pts[:, 1], 0.0)
+    # rect
+    pts = element_lattice_positions(16, spacing_m=0.05, lattice="rect", rows=4)
+    assert pts.shape == (16, 2)
+    assert abs(float(pts[:, 0].max() - pts[:, 0].min()) - 0.15) < 1e-9
+    # hex (centre point + 6 + 12 + 18 = 37 in 3 rings; request 19 cuts in ring 2)
+    pts = element_lattice_positions(19, spacing_m=0.05, lattice="hex")
+    assert pts.shape == (19, 2)
+    # Centre at origin.
+    np.testing.assert_allclose(pts[0], [0.0, 0.0])
+    # ring
+    pts = element_lattice_positions(8, spacing_m=0.05, lattice="ring")
+    assert pts.shape == (8, 2)
+    radii = np.linalg.norm(pts, axis=1)
+    np.testing.assert_allclose(radii, radii[0])
+
+
+def test_macro_array_gain_increases_monotonically_with_n(
+    solver: fa.PhysicalOpticsSolver,
+) -> None:
+    """Array directivity must strictly increase with N, and approach (but
+    not necessarily reach) the textbook ``D_elem + 10·log10(N)`` identity.
+
+    The textbook identity assumes the element pattern is ~constant over the
+    AF main lobe + grating lobes. For high-gain elements the element pattern
+    suppresses the grating-lobe contribution to radiated power, so realised
+    gain enhancement is a few dB below the ideal N×. We only assert
+    monotonicity + a generous lower bound.
+    """
+    elem = fa.SoretZonePlate(focal_length=0.05, design_freq=10e9, num_zones=1)
+    wavelength = 3e8 / 10e9
+    g_elem = solver.solve(elem, 10e9).far_field.peak_directivity_dbi()
+    gains = [g_elem]
+    for n in (2, 4, 8):
+        arr = fa.MacroFresnelArray.from_lattice(
+            elem, n_elements=n, spacing_m=0.45 * wavelength, lattice="linear"
+        )
+        gains.append(arr.solve(solver, 10e9).far_field.peak_directivity_dbi())
+    # Strict monotonic increase at each doubling.
+    for i in range(1, len(gains)):
+        assert gains[i] > gains[i - 1] + 0.5, f"gain did not increase at step {i}: {gains}"
+    # And the N=8 result must beat the element by at least 4 dB
+    # (textbook 10·log10(8) ≈ 9 dB; achieved enhancement is reduced because
+    # the element pattern is comparable in width to the AF main beam).
+    assert gains[-1] - gains[0] > 4.0, f"N=8 gain enhancement only {gains[-1] - gains[0]:.2f} dB"
+
+
+def test_macro_array_steering_lands_at_target() -> None:
+    """The array factor (independent of element pattern) must steer to target.
+
+    We test the array factor directly because for high-gain elements the
+    element pattern bounds the achievable scan range — a real engineering
+    constraint of phased aperture arrays. The AF math itself is exact.
+    """
+    from fresnelants.analysis.array_factor import array_factor
+
+    # Use a small element + sub-λ spacing so there are no grating lobes in
+    # visible space — otherwise np.argmax can pick a grating-lobe replica.
+    elem = fa.SoretZonePlate(focal_length=0.05, design_freq=10e9, num_zones=2)
+    wavelength = 3e8 / 10e9
+    arr = fa.MacroFresnelArray.from_lattice(
+        elem, n_elements=8, spacing_m=0.45 * wavelength, lattice="linear"
+    )
+    # Sample the AF on a fine (u, v) grid.
+    u = np.linspace(-1.0, 1.0, 401)
+    v = np.array([0.0])
+    for theta_deg in (0.0, 5.0, 10.0, 15.0, 20.0):
+        w = arr.weights_for_beam(theta_deg, 0.0)
+        af = array_factor(u, v, 10e9, arr.element_positions, w)
+        peak_idx = int(np.argmax(np.abs(af[0])))
+        u_peak = float(u[peak_idx])
+        u_expected = float(np.sin(np.deg2rad(theta_deg)))
+        # 1 grid cell = 0.005 in u.
+        assert abs(u_peak - u_expected) < 0.01, (
+            f"θ={theta_deg}: AF peak at u={u_peak:.3f}, expected {u_expected:.3f}"
+        )
+
+
+def test_macro_array_grating_lobes_at_predicted_positions() -> None:
+    """For spacing d > λ, AF has grating lobes at u_g = u_b ± mλ/d."""
+    from fresnelants.analysis.array_factor import array_factor
+
+    elem = fa.SoretZonePlate(focal_length=0.05, design_freq=10e9, num_zones=2)
+    wavelength = 3e8 / 10e9
+    spacing = 2.0 * wavelength  # → grating lobes at u = ±0.5
+    arr = fa.MacroFresnelArray.from_lattice(elem, n_elements=4, spacing_m=spacing, lattice="linear")
+    w = arr.weights_for_beam(0.0, 0.0)
+    u = np.linspace(-1.0, 1.0, 801)
+    v = np.array([0.0])
+    af = np.abs(array_factor(u, v, 10e9, arr.element_positions, w)[0])
+    # Find local maxima.
+    is_peak = np.r_[False, (af[1:-1] > af[:-2]) & (af[1:-1] > af[2:]), False]
+    peak_us = u[is_peak]
+    for u_expected in (0.0, 0.5, -0.5):
+        rel_err = float(np.min(np.abs(peak_us - u_expected)))
+        assert rel_err < 0.02, f"missing AF peak near u={u_expected}: peaks={peak_us}"
+
+
+def test_macro_array_quantized_weights_scan_loss() -> None:
+    """1-bit quantization adds at most ~4 dB scan loss vs continuous (Mailloux)."""
+    from fresnelants.analysis.array_factor import array_factor
+
+    elem = fa.SoretZonePlate(focal_length=0.05, design_freq=10e9, num_zones=2)
+    arr = fa.MacroFresnelArray.from_lattice(elem, n_elements=8, spacing_m=0.04, lattice="linear")
+    u = np.linspace(-1.0, 1.0, 401)
+    v = np.array([0.0])
+    theta_b = 30.0
+    w_cont = arr.weights_for_beam(theta_b, 0.0, bits=0)
+    w_1bit = arr.weights_for_beam(theta_b, 0.0, bits=1)
+    af_cont = np.abs(array_factor(u, v, 10e9, arr.element_positions, w_cont)[0])
+    af_1bit = np.abs(array_factor(u, v, 10e9, arr.element_positions, w_1bit)[0])
+    loss_db = 20.0 * np.log10(af_1bit.max() / af_cont.max())
+    assert loss_db > -4.0, f"1-bit scan-loss {loss_db:.2f} dB worse than 4 dB bound"
+    assert loss_db <= 0.0
+
+
+def test_macro_array_codebook_orthogonality() -> None:
+    """Beam i's pointing direction must be a deep null of beam j (i ≠ j)."""
+    from fresnelants.analysis.array_factor import array_factor
+
+    elem = fa.SoretZonePlate(focal_length=0.05, design_freq=10e9, num_zones=2)
+    arr = fa.MacroFresnelArray.from_lattice(elem, n_elements=16, spacing_m=0.04, lattice="linear")
+    directions = [(-20.0, 0.0), (-7.0, 0.0), (7.0, 0.0), (20.0, 0.0)]
+    book = arr.beam_codebook(directions, freq=10e9)
+    labels = list(book.keys())
+    u = np.linspace(-1.0, 1.0, 801)
+    v = np.array([0.0])
+    afs = {
+        lbl: np.abs(array_factor(u, v, 10e9, arr.element_positions, book[lbl])[0]) for lbl in labels
+    }
+    for i, (theta_i, _) in enumerate(directions):
+        u_i = float(np.sin(np.deg2rad(theta_i)))
+        idx_i = int(np.argmin(np.abs(u - u_i)))
+        peak_i = afs[labels[i]][idx_i]
+        for j, (theta_j, _) in enumerate(directions):
+            if i == j:
+                continue
+            u_j = float(np.sin(np.deg2rad(theta_j)))
+            idx_j = int(np.argmin(np.abs(u - u_j)))
+            cross = afs[labels[i]][idx_j]
+            ratio_db = 20.0 * np.log10(cross / peak_i)
+            assert ratio_db < -10.0, (
+                f"beam {labels[i]} leaks {ratio_db:.1f} dB into beam {labels[j]} pointing"
+            )
+
+
+def test_macro_array_coupling_correction_scales_element_pattern() -> None:
+    """coupling_q > 0 reduces the per-element pattern scale; vanishes at wide spacing.
+
+    Note: directivity is invariant to a uniform scaling of E (it's normalized
+    by the total radiated power). Coupling reduces ABSOLUTE gain / aperture
+    efficiency, not directivity. We test the scale factor directly because
+    that's the load-bearing physical quantity.
+    """
+    elem = fa.SoretZonePlate(focal_length=0.05, design_freq=10e9, num_zones=2)
+    wavelength = 3e8 / 10e9
+
+    arr_off = fa.MacroFresnelArray.from_lattice(
+        elem, n_elements=4, spacing_m=2.5 * wavelength, lattice="linear", coupling_q=0.0
+    )
+    arr_on = fa.MacroFresnelArray.from_lattice(
+        elem, n_elements=4, spacing_m=2.5 * wavelength, lattice="linear", coupling_q=0.5
+    )
+    s_off = arr_off._coupling_scale(10e9)
+    s_on = arr_on._coupling_scale(10e9)
+    assert s_off == 1.0
+    assert s_on < 0.95, f"correction did not reduce element pattern (scale={s_on:.4f})"
+
+    # At wide spacing — exp(-d/λ) → 0, correction effectively off.
+    arr_wide_on = fa.MacroFresnelArray.from_lattice(
+        elem, n_elements=4, spacing_m=20.0 * wavelength, lattice="linear", coupling_q=0.5
+    )
+    s_wide = arr_wide_on._coupling_scale(10e9)
+    assert s_wide > 0.999, f"correction not negligible at 20λ spacing: scale={s_wide:.5f}"
+
+
 @pytest.mark.parametrize(
     "theta_deg, phi_deg",
     [(0, 0), (10, 0), (20, 45), (30, 0), (45, 0)],

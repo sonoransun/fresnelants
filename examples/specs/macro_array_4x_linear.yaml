@@ -1,0 +1,11 @@
+kind: macro_array
+element:
+  kind: wood
+  focal_length: 1.0
+  design_freq: 10.0e9
+  num_zones: 8
+lattice: linear
+n_elements: 4
+spacing_m: 1.2
+beam_theta_deg: 0.0
+beam_phi_deg: 0.0

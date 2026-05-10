@@ -921,6 +921,278 @@ def _fractal_gallery(out_dir: Path) -> None:
     _save(fig, out_dir / "fractal_hero.png")
 
 
+def _macro_array_gallery(out_dir: Path) -> None:
+    """Macro arrays of Fresnel-antenna elements (phased-array receivers)."""
+    from fresnelants.analysis.array_factor import (
+        array_factor as _af,
+    )
+
+    solver = fa.PhysicalOpticsSolver(samples_per_wavelength=4.0, pad_factor=4)
+
+    # ----- 4-element linear (Wood ZP @ 10 GHz, spacing 1.2 m) -----
+    elem4 = fa.WoodZonePlate(focal_length=1.0, design_freq=10e9, num_zones=8)
+    arr4 = fa.MacroFresnelArray.from_lattice(elem4, n_elements=4, spacing_m=1.2, lattice="linear")
+
+    # Layout: top-down circles to scale.
+    fig, ax = plt.subplots(figsize=(10, 3.5))
+    for x, y in arr4.element_positions:
+        ax.add_patch(
+            Circle(
+                (x, y),
+                elem4.aperture_radius,
+                fill=True,
+                facecolor="tab:blue",
+                edgecolor="navy",
+                alpha=0.5,
+            )
+        )
+    ax.set_aspect("equal")
+    extent = arr4.array_extent
+    ax.set_xlim(-extent[0] / 2 * 1.1, extent[0] / 2 * 1.1)
+    ax.set_ylim(-extent[1] / 2 * 1.5, extent[1] / 2 * 1.5)
+    ax.set_xlabel("x [m]")
+    ax.set_ylabel("y [m]")
+    ax.set_title(
+        f"4× Wood-zone-plate linear macro array @ 10 GHz "
+        f"(spacing 1.2 m, footprint {extent[0]:.1f}×{extent[1]:.1f} m)"
+    )
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_4x_linear_layout.png")
+
+    # Steering cuts (within element beam). Plot principal-cuts for 4 small
+    # angles since the element pattern is quite narrow.
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    for theta_b in (0, 1, 2, 3):
+        w = arr4.weights_for_beam(theta_b, 0.0)
+        res = arr4.solve(solver, 10e9, weights=w)
+        td, db = res.far_field.cut("E")
+        valid = ~np.isnan(td)
+        ax.plot(td[valid], db[valid], label=f"θ_b = {theta_b}°")
+    ax.set_xlim(-10, 10)
+    ax.set_ylim(-30, 2)
+    ax.set_xlabel("θ [deg]")
+    ax.set_ylabel("Normalized gain [dB]")
+    ax.set_title("4× linear macro array — beam steering within element pattern")
+    ax.legend(loc="lower center", ncol=4)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_4x_steering_cuts.png")
+
+    # ----- 16-element rectangular (8×8 reflectarray @ 28 GHz) -----
+    elem16 = fa.Reflectarray(focal_length=0.20, design_freq=28e9, nx=8, ny=8)
+    arr16 = fa.MacroFresnelArray.from_lattice(
+        elem16, n_elements=16, spacing_m=0.05, lattice="rect", rows=4
+    )
+    res16 = arr16.solve(solver, 28e9)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
+    # Layout panel.
+    for x, y in arr16.element_positions:
+        axes[0].add_patch(
+            Circle(
+                (x * 1e3, y * 1e3),
+                elem16.aperture_radius * 1e3,
+                fill=True,
+                facecolor="tab:orange",
+                edgecolor="darkred",
+                alpha=0.5,
+            )
+        )
+    axes[0].set_aspect("equal")
+    extent16 = arr16.array_extent
+    axes[0].set_xlim(-extent16[0] / 2 * 1.2 * 1e3, extent16[0] / 2 * 1.2 * 1e3)
+    axes[0].set_ylim(-extent16[1] / 2 * 1.2 * 1e3, extent16[1] / 2 * 1.2 * 1e3)
+    axes[0].set_xlabel("x [mm]")
+    axes[0].set_ylabel("y [mm]")
+    axes[0].set_title("16× 8x8-reflectarray, 4×4 macro grid")
+    axes[0].grid(True, alpha=0.3)
+    # Far-field panel.
+    d_db = 10 * np.log10(np.maximum(res16.far_field.directivity(), 1e-30))
+    im = axes[1].imshow(
+        d_db,
+        extent=(
+            res16.far_field.u[0],
+            res16.far_field.u[-1],
+            res16.far_field.v[0],
+            res16.far_field.v[-1],
+        ),
+        origin="lower",
+        cmap="inferno",
+        vmin=d_db.max() - 30,
+        vmax=d_db.max(),
+    )
+    axes[1].add_patch(
+        Circle((0, 0), 1.0, fill=False, edgecolor="white", linewidth=0.6, linestyle="--")
+    )
+    # Annotate predicted grating-lobe positions for spacing 0.05 m at 28 GHz.
+    wavelength16 = 3e8 / 28e9
+    u_g = wavelength16 / 0.05
+    for du in (-u_g, u_g):
+        for dv in (-u_g, 0, u_g):
+            if du == 0 and dv == 0:
+                continue
+            if du**2 + dv**2 <= 1.0:
+                axes[1].plot(du, dv, "x", color="cyan", markersize=10, markeredgewidth=2)
+    axes[1].set_xlabel(r"$u$")
+    axes[1].set_ylabel(r"$v$")
+    axes[1].set_title(f"Far-field — peak {d_db.max():.1f} dBi (× = grating lobes)")
+    axes[1].set_aspect("equal")
+    fig.colorbar(im, ax=axes[1], shrink=0.85, label="dBi")
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_16x_rect_pattern.png")
+
+    # 4-beam codebook overlay (E-plane).
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    book = arr16.beam_codebook(
+        directions=[(-15.0, 0.0), (-5.0, 0.0), (5.0, 0.0), (15.0, 0.0)],
+        labels=["beam_W", "beam_C-", "beam_C+", "beam_E"],
+    )
+    for label, w in book.items():
+        res_b = arr16.solve(solver, 28e9, weights=w)
+        td, db = res_b.far_field.cut("E")
+        valid = ~np.isnan(td)
+        ax.plot(td[valid], db[valid], label=label)
+    ax.set_xlim(-30, 30)
+    ax.set_ylim(-30, 2)
+    ax.set_xlabel("θ [deg]")
+    ax.set_ylabel("Normalized gain [dB]")
+    ax.set_title("16× rectangular macro array — 4-beam receive codebook @ 28 GHz")
+    ax.legend(loc="lower center", ncol=4)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_16x_codebook.png")
+
+    # ----- 128-element hex (Soret @ 30 GHz, 1.5λ spacing) -----
+    elem128 = fa.SoretZonePlate(focal_length=0.05, design_freq=30e9, num_zones=2)
+    wavelength128 = 3e8 / 30e9
+    arr128 = fa.MacroFresnelArray.from_lattice(
+        elem128, n_elements=128, spacing_m=1.5 * wavelength128, lattice="hex"
+    )
+    res128 = arr128.solve(solver, 30e9)
+
+    fig, ax = plt.subplots(figsize=(7, 6.5))
+    for x, y in arr128.element_positions:
+        ax.add_patch(
+            Circle(
+                (x * 1e3, y * 1e3),
+                elem128.aperture_radius * 1e3,
+                fill=True,
+                facecolor="tab:purple",
+                edgecolor="indigo",
+                alpha=0.4,
+            )
+        )
+    ax.set_aspect("equal")
+    extent128 = arr128.array_extent
+    ax.set_xlim(-extent128[0] / 2 * 1.1 * 1e3, extent128[0] / 2 * 1.1 * 1e3)
+    ax.set_ylim(-extent128[1] / 2 * 1.1 * 1e3, extent128[1] / 2 * 1.1 * 1e3)
+    ax.set_xlabel("x [mm]")
+    ax.set_ylabel("y [mm]")
+    ax.set_title(
+        f"128× Soret-ZP hex-close-packed array @ 30 GHz "
+        f"(spacing 1.5λ, peak D = {res128.far_field.peak_directivity_dbi():.1f} dBi)"
+    )
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_128x_hex_layout.png")
+
+    # 128-element 2D pattern with predicted grating lobes overlaid.
+    fig, ax = plt.subplots(figsize=(6.5, 5.5))
+    d_db = 10 * np.log10(np.maximum(res128.far_field.directivity(), 1e-30))
+    im = ax.imshow(
+        d_db,
+        extent=(
+            res128.far_field.u[0],
+            res128.far_field.u[-1],
+            res128.far_field.v[0],
+            res128.far_field.v[-1],
+        ),
+        origin="lower",
+        cmap="inferno",
+        vmin=d_db.max() - 30,
+        vmax=d_db.max(),
+    )
+    ax.add_patch(Circle((0, 0), 1.0, fill=False, edgecolor="white", linewidth=0.6, linestyle="--"))
+    # Predicted grating lobes for hex lattice at d = 1.5λ.
+    u_g = wavelength128 / arr128.min_neighbour_spacing
+    for ang_deg in range(0, 360, 60):
+        a = np.deg2rad(ang_deg)
+        du, dv = u_g * np.cos(a), u_g * np.sin(a)
+        if du**2 + dv**2 <= 1.0:
+            ax.plot(du, dv, "x", color="cyan", markersize=10, markeredgewidth=2)
+    ax.set_xlabel(r"$u$")
+    ax.set_ylabel(r"$v$")
+    ax.set_title(f"128× hex pattern — peak {d_db.max():.1f} dBi (× = predicted grating lobes)")
+    ax.set_aspect("equal")
+    fig.colorbar(im, ax=ax, shrink=0.85, label="dBi")
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_128x_hex_pattern.png")
+
+    # ----- Quantization scan-loss study -----
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    elem_q = fa.SoretZonePlate(focal_length=0.05, design_freq=30e9, num_zones=2)
+    arr_q = fa.MacroFresnelArray.from_lattice(
+        elem_q, n_elements=8, spacing_m=0.6 * wavelength128, lattice="linear"
+    )
+    u = np.linspace(-1.0, 1.0, 401)
+    v = np.array([0.0])
+    theta_b = 30.0
+    for bits, label in ((0, "continuous"), (4, "4-bit"), (2, "2-bit"), (1, "1-bit")):
+        w = arr_q.weights_for_beam(theta_b, 0.0, bits=bits)
+        af = np.abs(_af(u, v, 30e9, arr_q.element_positions, w)[0])
+        peak = float(af.max())
+        ax.plot(
+            u,
+            20 * np.log10(np.maximum(af / peak, 1e-3)),
+            label=f"{label} (peak {20 * np.log10(peak):.1f} dB)",
+        )
+    ax.axvline(np.sin(np.deg2rad(theta_b)), color="tab:red", linestyle=":", alpha=0.5)
+    ax.text(
+        np.sin(np.deg2rad(theta_b)) + 0.01,
+        -2,
+        f"target u={np.sin(np.deg2rad(theta_b)):.2f}",
+        color="tab:red",
+        fontsize=8,
+    )
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(-40, 2)
+    ax.set_xlabel(r"$u = \sin θ$")
+    ax.set_ylabel(r"$|AF|$ [dB normalized to peak]")
+    ax.set_title(f"8-element AF — quantization scan-loss at θ_b = {theta_b}°")
+    ax.legend(loc="lower right")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_quantization.png")
+
+    # ----- Mutual-coupling correction trend -----
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    spacings_lambdas = np.linspace(0.6, 5.0, 30)
+    for q_val, color in (
+        (0.0, "tab:gray"),
+        (0.3, "tab:blue"),
+        (0.5, "tab:orange"),
+        (0.8, "tab:red"),
+    ):
+        scales = []
+        for s_lam in spacings_lambdas:
+            arr_c = fa.MacroFresnelArray.from_lattice(
+                elem_q,
+                n_elements=4,
+                spacing_m=s_lam * wavelength128,
+                lattice="linear",
+                coupling_q=q_val,
+            )
+            scales.append(20 * np.log10(arr_c._coupling_scale(30e9)))
+        ax.plot(spacings_lambdas, scales, "o-", color=color, label=f"Q = {q_val}", markersize=4)
+    ax.set_xlabel("element spacing [λ]")
+    ax.set_ylabel("per-element pattern scale [dB]")
+    ax.set_title("Mutual-coupling first-order correction trend")
+    ax.legend(loc="lower right")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    _save(fig, out_dir / "macro_array_coupling.png")
+
+
 def main(out_dir: Path | str | None = None) -> None:
     target = Path(out_dir) if out_dir else ROOT / "docs" / "img"
     target.mkdir(parents=True, exist_ok=True)
@@ -939,6 +1211,7 @@ def main(out_dir: Path | str | None = None) -> None:
     _synth_gallery(target)
     _measured_gallery(target)
     _fractal_gallery(target)
+    _macro_array_gallery(target)
     print(f"Done. {len(list(target.glob('*.png')))} PNGs written.")
 
 

@@ -1,0 +1,11 @@
+kind: macro_array
+element:
+  kind: soret
+  focal_length: 0.05
+  design_freq: 30.0e9
+  num_zones: 2
+lattice: hex
+n_elements: 128
+spacing_m: 0.015
+beam_theta_deg: 0.0
+beam_phi_deg: 0.0

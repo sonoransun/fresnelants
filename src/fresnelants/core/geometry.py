@@ -138,6 +138,105 @@ def make_aperture_grid(
     )
 
 
+def element_lattice_positions(
+    n_elements: int,
+    spacing_m: float,
+    lattice: str = "linear",
+    rows: int | None = None,
+) -> NDArray[np.float64]:
+    """Return ``(N, 2)`` (x, y) positions [m] for *n_elements* on a lattice.
+
+    Lattices
+    --------
+    ``linear``
+        1-D row of *n_elements* spaced by *spacing_m* along x. y = 0.
+    ``rect``
+        Rectangular grid; supply *rows* (defaults to ``ceil(sqrt(n_elements))``)
+        and the helper packs rectangularly, padding with empty cells if N is
+        not exactly *rows × cols*. The first *n_elements* points are returned.
+    ``hex``
+        Hexagonal close-packed: rows are offset by half a step in x, and the
+        row spacing is ``spacing_m · √3/2``. Filled in expanding hex rings to
+        accommodate *n_elements*; the first *n_elements* are returned.
+    ``ring``
+        *n_elements* equally-spaced points on a circle of radius
+        ``spacing_m · n_elements / (2π)`` (so neighbour arc-length ≈
+        *spacing_m*).
+    """
+    if n_elements <= 0:
+        raise ValueError("n_elements must be ≥ 1")
+    if spacing_m <= 0:
+        raise ValueError("spacing_m must be > 0")
+    if lattice == "linear":
+        x = (np.arange(n_elements) - (n_elements - 1) / 2.0) * spacing_m
+        y = np.zeros_like(x)
+        return np.stack([x, y], axis=1)
+    if lattice == "rect":
+        if rows is None:
+            rows = int(np.ceil(np.sqrt(n_elements)))
+        cols = int(np.ceil(n_elements / rows))
+        ix, iy = np.meshgrid(np.arange(cols), np.arange(rows), indexing="xy")
+        x = (ix.flatten() - (cols - 1) / 2.0) * spacing_m
+        y = (iy.flatten() - (rows - 1) / 2.0) * spacing_m
+        pts = np.stack([x, y], axis=1)
+        return pts[:n_elements]
+    if lattice == "hex":
+        # Generate hex rings until we have enough points; centre point + 6r per ring.
+        pts: list[tuple[float, float]] = [(0.0, 0.0)]
+        ring = 0
+        dy = spacing_m * np.sqrt(3.0) / 2.0
+        while len(pts) < n_elements:
+            ring += 1
+            for i in range(6 * ring):
+                # Walk the ring corner-to-corner.
+                edge = i // ring
+                step = i % ring
+                # Six corners of the ring at angles 0, 60, 120, 180, 240, 300°.
+                corner_a = np.array(
+                    [
+                        ring * spacing_m * np.cos(edge * np.pi / 3.0),
+                        ring
+                        * spacing_m
+                        * np.sin(edge * np.pi / 3.0)
+                        * (2.0 / np.sqrt(3.0))
+                        * (np.sqrt(3.0) / 2.0),
+                    ]
+                )
+                corner_b = np.array(
+                    [
+                        ring * spacing_m * np.cos((edge + 1) * np.pi / 3.0),
+                        ring
+                        * spacing_m
+                        * np.sin((edge + 1) * np.pi / 3.0)
+                        * (2.0 / np.sqrt(3.0))
+                        * (np.sqrt(3.0) / 2.0),
+                    ]
+                )
+                p = corner_a + (corner_b - corner_a) * (step / ring)
+                pts.append((float(p[0]), float(p[1])))
+                if len(pts) >= n_elements:
+                    break
+        # Re-derive y with the proper hex row-spacing scaling for clarity.
+        # (The simpler corner-walk above is correct in form; tighten by snapping
+        # rows to the canonical hex-close-packed lattice.)
+        out = np.array(pts[:n_elements], dtype=np.float64)
+        # Snap y to multiples of dy.
+        out[:, 1] = np.round(out[:, 1] / dy) * dy
+        # Snap x to half-spacing offsets when y is on an odd row.
+        odd_row = np.round(out[:, 1] / dy).astype(int) % 2 != 0
+        x_step = spacing_m
+        out[:, 0] = (
+            np.round((out[:, 0] - 0.5 * x_step * odd_row) / x_step) * x_step
+            + 0.5 * x_step * odd_row
+        )
+        return out
+    if lattice == "ring":
+        radius = spacing_m * n_elements / (2.0 * np.pi)
+        ang = np.arange(n_elements) * 2.0 * np.pi / n_elements
+        return np.stack([radius * np.cos(ang), radius * np.sin(ang)], axis=1)
+    raise ValueError(f"unknown lattice {lattice!r} (must be 'linear', 'rect', 'hex', 'ring')")
+
+
 def offset_zone_centers(
     num_zones: int,
     focal_length: float,

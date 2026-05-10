@@ -77,6 +77,14 @@ def test_spec_dispatch_roundtrip() -> None:
             "height": 0.05,
             "stage": 2,
         },
+        {
+            "kind": "macro_array",
+            "element": {"kind": "wood", "focal_length": 1.0, "design_freq": 10e9, "num_zones": 8},
+            "lattice": "linear",
+            "n_elements": 4,
+            "spacing_m": 1.2,
+            "beam_theta_deg": 0.0,
+        },
     ]
     expected = {
         "soret": fa.SoretZonePlate,
@@ -91,6 +99,7 @@ def test_spec_dispatch_roundtrip() -> None:
         "sierpinski_reflectarray": fa.SierpinskiReflectarray,
         "spherical_fractal": fa.SphericalFractalFresnelLens,
         "conical_fractal": fa.ConicalFractalFresnelLens,
+        "macro_array": fa.MacroFresnelArray,
     }
     for spec in designs:
         d = spec_from_dict(spec)

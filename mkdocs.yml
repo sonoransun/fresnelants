@@ -36,6 +36,15 @@ extra_javascript:
 
 nav:
   - Home: index.md
+  - Background:
+      - Overview: background/history.md
+      - "1888–1910 — Spark-gap era": background/history/01-spark-gap-era.md
+      - "1910–1940 — Resonant arrays": background/history/02-resonant-arrays.md
+      - "1940–1970 — Microwave reflectors": background/history/03-microwave-reflectors.md
+      - "1875–1980 — Lenses & zone plates": background/history/04-lens-and-zone-plates.md
+      - "1960–2000 — Phased arrays": background/history/05-phased-arrays.md
+      - "1963–present — Reflectarrays, RIS, metasurfaces": background/history/06-reflectarrays-ris-metasurfaces.md
+  - Applications: applications.md
   - Theory: theory.md
   - Designs:
       - Soret / Wood zone plate: designs/zone_plate.md
@@ -58,3 +67,6 @@ nav:
       - Fractal (Cantor / Sierpinski): designs/fractal.md
   - Extensions (v0.5):
       - Macro arrays of Fresnel elements: designs/macro_array.md
+  - Reference:
+      - Bibliography: reference/bibliography.md
+      - Notation & symbols: reference/notation.md

@@ -9,7 +9,26 @@ from one `pip install`.
 
 ![Hero figure](docs/img/hero.png)
 
-## v0.5 highlights
+## Background & history
+
+Fresnel-style antennas sit at the end of a 130-year arc of incremental
+improvements in radio-frequency reception — from Hertz's spark-gap
+dipole through WWII parabolic radar through modern reconfigurable
+metasurfaces. The library's nine-plus design families each descend from
+a specific point on that arc, and the reasoning behind each family's
+trade-offs makes more sense once you know where it came from.
+
+The full history is split into one overview and six era pages:
+
+- [Overview & timeline](docs/background/history.md)
+- [1888 – 1910 — The spark-gap era](docs/background/history/01-spark-gap-era.md) (Hertz, Marconi, the Hertzian dipole)
+- [1910 – 1940 — Resonant arrays](docs/background/history/02-resonant-arrays.md) (Yagi-Uda, broadcast, the array factor)
+- [1940 – 1970 — Microwave reflectors](docs/background/history/03-microwave-reflectors.md) (WWII radar, parabolic dishes, Cassegrain)
+- [1875 – 1980 — Lenses & zone plates](docs/background/history/04-lens-and-zone-plates.md) (Soret 1875, Wood 1898, microwave Fresnel)
+- [1960 – 2000 — Phased arrays](docs/background/history/05-phased-arrays.md) (PESA, AESA, digital beamforming)
+- [1963 – present — Reflectarrays, RIS, metasurfaces](docs/background/history/06-reflectarrays-ris-metasurfaces.md) (the era this library calls home)
+
+## Recent highlights
 
 `MacroFresnelArray` — phased arrays whose elements are themselves
 complete Fresnel antennas. Each element is a zone plate / reflectarray /
@@ -30,8 +49,6 @@ without FFT-cost growth.
 |---|---|---|---|
 | ![](docs/img/macro_array_4x_linear_layout.png) | ![](docs/img/macro_array_16x_rect_pattern.png) | ![](docs/img/macro_array_128x_hex_pattern.png) | ![](docs/img/macro_array_16x_codebook.png) |
 
-## v0.4 highlights
-
 Fractal Fresnel zone plates — six new families built from triadic Cantor
 and Sierpinski-carpet generators applied to the Fresnel zone construction.
 
@@ -47,8 +64,6 @@ and Sierpinski-carpet generators applied to the Fresnel zone construction.
 |---|---|
 | ![Fractal hero](docs/img/fractal_hero.png) | ![Polyfocal](docs/img/fractal_cantor_axial_intensity.png) |
 
-## v0.2 highlights
-
 | Direction | What's new |
 |---|---|
 | **Composite multi-stage** | `CompositeAntenna` chains plates through angular-spectrum cascades; pre-built `AchromaticDoublet`, `BifocalLens`, `FoldedReflectarray`. |
@@ -59,8 +74,6 @@ and Sierpinski-carpet generators applied to the Fresnel zone construction.
 | Composite | RIS | Metasurface | Conformal |
 |---|---|---|---|
 | ![](docs/img/composite_doublet_bandwidth.png) | ![](docs/img/ris_varactor_steering.png) | ![](docs/img/metasurface_pb_pol.png) | ![](docs/img/conformal_cylindrical_77ghz.png) |
-
-## v0.3 highlights
 
 Polish + four new feature waves:
 
@@ -149,6 +162,23 @@ sequenceDiagram
   S->>V: 2D / 3D plots, focal-region intensity
   S->>E: → STL · STEP · Gerber · Excellon
 ```
+
+## Choosing a design
+
+Every family in the library exists to solve a specific deployment
+problem. The full mapping — capability matrix plus narrative scenarios
+for SATCOM, mmWave 5G, automotive radar, RIS, radio astronomy, and the
+rest — is in [docs/applications.md](docs/applications.md). The compressed
+view:
+
+| You need… | Reach for |
+|---|---|
+| **Fixed beam, low cost, narrowband** | `SoretZonePlate`, `WoodZonePlate`, or `PhaseCorrectingPlate` |
+| **Fixed beam, high efficiency, wider band** | `CurvilinearFresnel`, `AchromaticDoublet` (composite) |
+| **Electronic steering** | `Reflectarray`, `ReconfigurableArray` / `CodedRIS`, `MacroFresnelArray` |
+| **Dual-polarization shared aperture** | `MetasurfaceLens`, `DualPolSharedAperture` |
+| **Conformal / non-flat substrate** | `CylindricalFresnelLens`, `SphericalFresnelLens` |
+| **Harmonic beamforming or DOA** | `TimeModulatedArray` |
 
 ## Quickstart
 
@@ -346,6 +376,13 @@ fails, so docs cannot drift from the implementation.
 MIT — see `LICENSE`.
 
 ## References
+
+The full annotated bibliography — organised by topic, cross-referenced
+to the implementing module — lives at
+[docs/reference/bibliography.md](docs/reference/bibliography.md). The
+notation and sign-convention reference is at
+[docs/reference/notation.md](docs/reference/notation.md). The four
+canonical textbooks the library leans on most heavily:
 
 * Hristov, *Fresnel Zones in Wireless Links, Zone Plate Lenses and Antennas*
   (Artech House, 2000).
